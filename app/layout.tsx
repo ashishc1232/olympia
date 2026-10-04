@@ -8,6 +8,9 @@ const barlowCondensed = Barlow_Condensed({ subsets: ["latin"], weight: ["600", "
 export const metadata: Metadata = {
   title: "Olympia | Sports flooring binders & industrial polymers",
   description: "Olympia makes sports flooring binders, polymer chemicals and industrial gum for track and sports surface manufacturers.",
+  icons:{
+    icon:"/favicon.png"
+  }
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
