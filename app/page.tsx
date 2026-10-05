@@ -1,29 +1,11 @@
-import { ArrowRight, FlaskConical, Layers, Droplets } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
-
-
-const facts = [
-  {
-    icon: Layers,
-    title: "One binder, thousands of granules",
-    text: "A polyurethane binder coats rubber granules and bonds them into a single elastic surface, which is how running tracks get their spring.",
-  },
-  {
-    icon: Droplets,
-    title: "It cures with moisture",
-    text: "Many PU binders react with humidity in the air to harden, so curing depends on weather as much as on the mix.",
-  },
-  {
-    icon: FlaskConical,
-    title: "Polymers are long chains",
-    text: "Industrial gums and polymers are long molecular chains. Change the chain length or cross-linking and you change how stiff, sticky or flexible the product is.",
-  },
-];
+import SiteNavbar from "@/components/SiteNavbar";
+import { HeroCarousel } from "@/components/HeroCarousel";
+import InnovationSection from "@/components/innovation-section";
 
 // Placeholder copy: replace with Olympia's real products, team and contact details.
 const products = [
@@ -42,40 +24,10 @@ const team = [
 export default function Home() {
   return (
     <>
-      <SiteHeader />
+      <SiteNavbar />
       <main>
-        <section id="home" className="relative overflow-hidden">
-          <div className="relative mx-auto max-w-6xl px-5 py-24 md:py-36">
-            <h1 className="max-w-2xl text-6xl leading-[0.95] md:text-8xl">
-              Binders that hold the track together.
-            </h1>
-            <p className="mt-6 max-w-lg text-lg text-muted-foreground">
-              Olympia supplies sports flooring binders, chemical polymers and industrial gum to manufacturers and contractors.
-            </p>
-            <div className="mt-9 flex flex-wrap gap-3">
-              <Button asChild size="lg" className="bg-accent text-accent-foreground hover:bg-accent/90">
-                <a href="#products">View products <ArrowRight /></a>
-              </Button>
-              <Button asChild size="lg" variant="outline">
-                <a href="#contact">Request a quote</a>
-              </Button>
-            </div>
-
-            {/* Did you know */}
-            <div className="mt-16 grid gap-4 md:grid-cols-3">
-              {facts.map(({ icon: Icon, title, text }) => (
-                <div
-                  key={title}
-                  className="rounded-lg border border-border bg-card/60 p-5 backdrop-blur-sm"
-                >
-                  <Icon className="size-5 text-accent" aria-hidden="true" />
-                  <h3 className="mt-3 text-base font-semibold">{title}</h3>
-                  <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{text}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
+        <HeroCarousel />
+        <InnovationSection/>
 
         <section id="about" className="bg-primary text-primary-foreground">
           <div className="mx-auto grid max-w-6xl gap-10 px-5 py-20 md:grid-cols-2">
