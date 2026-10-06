@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 import Image from "next/image";
-import type { PointerEvent } from "react";
+import type { PointerEvent, TransitionEvent } from "react";
 
 type Slide = {
   eyebrow: string;
@@ -72,16 +72,18 @@ const slides: Slide[] = [
 const AUTOPLAY_MS = 4600;
 const TRANSITION_MS = 900;
 const SWIPE_THRESHOLD = 42;
+const IMAGE_LOAD_TIMEOUT_MS = 8000;
+
+/*
+ * Internal track: [last, 1, 2, 3, 4, first]
+ * Valid positions are 0 … slides.length + 1.
+ * Positions 1 … slides.length are the real slides.
+ */
+const MAX_POSITION = slides.length + 1;
+const clampPosition = (value: number) =>
+  Math.min(MAX_POSITION, Math.max(0, value));
 
 export function HeroCarousel() {
-  /*
-   * Internal carousel:
-   *
-   * [last, 1, 2, 3, 4, first]
-   *
-   * Actual starting position:
-   * 1
-   */
   const loopSlides = useMemo(
     () => [slides[slides.length - 1], ...slides, slides[0]],
     [],
@@ -92,76 +94,73 @@ export function HeroCarousel() {
   const [paused, setPaused] = useState(false);
 
   /*
-   * Important:
+   * FIX 1 — the tab can be hidden.
    *
-   * We preload the actual slide images before autoplay starts.
+   * Background tabs throttle timers and never finish CSS transitions.
+   * Before, the interval kept adding +1 while `transitionend` never fired,
+   * so `position` ran past the last clone and the track slid out of
+   * the slide range → blank slide. Clicking a dot "fixed" it because
+   * that reset `position`.
    *
-   * This prevents the next slide from showing only its background
-   * while the image is still downloading.
+   * Now: autoplay stops while the tab is hidden, and position is always
+   * clamped to the valid range.
+   */
+  const [pageVisible, setPageVisible] = useState(true);
+
+  /*
+   * FIX 2 — real image-load tracking.
+   *
+   * next/image requests `/_next/image?...` URLs, so preloading the raw URL
+   * with `new Image()` did NOT warm the cache for the images actually shown.
+   * Now we wait for the real <Image> elements to report `onLoad`.
    */
   const [imagesReady, setImagesReady] = useState(false);
+  const loadedImages = useRef<Set<string>>(new Set());
 
   const dragStartX = useRef<number | null>(null);
-  const autoplayRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  /*
-   * Convert internal position into actual slide index.
-   */
   const activeIndex =
-    ((position - 1) % slides.length + slides.length) % slides.length;
+    (((position - 1) % slides.length) + slides.length) % slides.length;
 
-  /*
-   * PRELOAD HERO IMAGES
-   *
-   * Only preload unique actual slide images.
-   * Do not preload clones separately because they use the same URLs.
-   */
+  /* Mark an image as loaded (or failed — never block the carousel). */
+  const markImageDone = useCallback((src: string) => {
+    loadedImages.current.add(src);
+
+    if (loadedImages.current.size >= slides.length) {
+      setImagesReady(true);
+    }
+  }, []);
+
+  /* Safety net: start autoplay even if some image never reports back. */
   useEffect(() => {
-    let cancelled = false;
+    const timer = window.setTimeout(
+      () => setImagesReady(true),
+      IMAGE_LOAD_TIMEOUT_MS,
+    );
 
-    const preloadImages = async () => {
-      const promises = slides.map(
-        (slide) =>
-          new Promise<void>((resolve) => {
-            const image = new window.Image();
+    return () => window.clearTimeout(timer);
+  }, []);
 
-            image.onload = () => resolve();
+  /* Track tab visibility. */
+  useEffect(() => {
+    const onVisibilityChange = () => setPageVisible(!document.hidden);
 
-            /*
-             * Even if one image fails, don't block the entire carousel.
-             */
-            image.onerror = () => resolve();
+    onVisibilityChange();
 
-            image.src = slide.image;
-          }),
-      );
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
-      await Promise.all(promises);
-
-      if (!cancelled) {
-        setImagesReady(true);
-      }
-    };
-
-    preloadImages();
-
-    return () => {
-      cancelled = true;
-    };
+    return () =>
+      document.removeEventListener("visibilitychange", onVisibilityChange);
   }, []);
 
   /*
    * AUTOPLAY
    *
-   * Don't start autoplay until all hero images have been requested.
+   * Only runs when images are ready, the user isn't interacting,
+   * and the tab is actually visible.
    */
   useEffect(() => {
-    if (!imagesReady || paused) {
-      if (autoplayRef.current) {
-        clearInterval(autoplayRef.current);
-        autoplayRef.current = null;
-      }
-
+    if (!imagesReady || paused || !pageVisible) {
       return;
     }
 
@@ -173,100 +172,115 @@ export function HeroCarousel() {
       return;
     }
 
-    autoplayRef.current = setInterval(() => {
+    const interval = window.setInterval(() => {
       setWithTransition(true);
-
-      setPosition((current) => current + 1);
+      setPosition((current) => clampPosition(current + 1));
     }, AUTOPLAY_MS);
 
-    return () => {
-      if (autoplayRef.current) {
-        clearInterval(autoplayRef.current);
-        autoplayRef.current = null;
-      }
-    };
-  }, [imagesReady, paused]);
+    return () => window.clearInterval(interval);
+  }, [imagesReady, paused, pageVisible]);
 
-  /*
-   * Move to a specific internal position.
-   */
   const goToPosition = useCallback((nextPosition: number) => {
     setWithTransition(true);
-    setPosition(nextPosition);
+    setPosition(clampPosition(nextPosition));
   }, []);
 
-  /*
-   * Move to a real slide index.
-   */
   const goToSlide = useCallback((index: number) => {
     setWithTransition(true);
     setPosition(index + 1);
   }, []);
 
   /*
-   * Infinite loop correction.
+   * INFINITE LOOP CORRECTION
    *
-   * [last, 1, 2, 3, 4, first]
-   *
-   * If we move to cloned "first":
-   *
-   * position = 5
-   *
-   * Wait until the animation finishes,
-   * then instantly move to real position 1.
+   * Cloned "first" (position 5) -> jump to real 1
+   * Cloned "last"  (position 0) -> jump to real 4
    */
-  const handleTransitionEnd = useCallback(() => {
+  const snapIfNeeded = useCallback(() => {
     if (position === 0) {
       setWithTransition(false);
       setPosition(slides.length);
       return;
     }
 
-    if (position === slides.length + 1) {
+    if (position === MAX_POSITION) {
       setWithTransition(false);
       setPosition(1);
     }
   }, [position]);
 
-  /*
-   * Restore CSS transition after an instant loop correction.
-   */
-  useEffect(() => {
-    if (!withTransition) {
-      const frame = window.requestAnimationFrame(() => {
-        setWithTransition(true);
-      });
-
-      return () => {
-        window.cancelAnimationFrame(frame);
-      };
-    }
-  }, [withTransition]);
-
-  /*
-   * POINTER DOWN
-   */
-  const handlePointerDown = useCallback(
-    (event: PointerEvent<HTMLElement>) => {
+  const handleTransitionEnd = useCallback(
+    (event: TransitionEvent<HTMLDivElement>) => {
       /*
-       * Don't treat pagination clicks as swipe gestures.
+       * Ignore transitionend events bubbling up from children
+       * (CTA underline, etc.) — only react to the slider's own transform.
        */
-      if ((event.target as HTMLElement).closest(".swiper-pagination")) {
+      if (
+        event.target !== event.currentTarget ||
+        event.propertyName !== "transform"
+      ) {
         return;
       }
 
-      dragStartX.current = event.clientX;
-
-      setPaused(true);
-
-      event.currentTarget.setPointerCapture(event.pointerId);
+      snapIfNeeded();
     },
-    [],
+    [snapIfNeeded],
   );
 
   /*
-   * POINTER UP
+   * FIX 3 — `transitionend` is not guaranteed to fire (hidden tab, reduced
+   * motion, interrupted transition). If we are sitting on a clone, snap back
+   * after the transition time even if the event never arrives.
+   * When the tab is hidden there is nothing to animate, so snap immediately.
    */
+  useEffect(() => {
+    if (position !== 0 && position !== MAX_POSITION) {
+      return;
+    }
+
+    const delay = document.hidden ? 0 : TRANSITION_MS + 80;
+    const timer = window.setTimeout(snapIfNeeded, delay);
+
+    return () => window.clearTimeout(timer);
+  }, [position, pageVisible, snapIfNeeded]);
+
+  /*
+   * Restore the CSS transition after an instant loop correction.
+   *
+   * Two animation frames: the "no transition" position must be painted
+   * first, otherwise the browser animates the jump backwards.
+   */
+  useEffect(() => {
+    if (withTransition) {
+      return;
+    }
+
+    let secondFrame = 0;
+
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        setWithTransition(true);
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+    };
+  }, [withTransition]);
+
+  const handlePointerDown = useCallback((event: PointerEvent<HTMLElement>) => {
+    if ((event.target as HTMLElement).closest(".swiper-pagination")) {
+      return;
+    }
+
+    dragStartX.current = event.clientX;
+
+    setPaused(true);
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }, []);
+
   const handlePointerUp = useCallback(
     (event: PointerEvent<HTMLElement>) => {
       if (dragStartX.current === null) {
@@ -279,17 +293,10 @@ export function HeroCarousel() {
 
       setPaused(false);
 
-      /*
-       * Ignore tiny movements.
-       */
       if (Math.abs(dragDistance) < SWIPE_THRESHOLD) {
         return;
       }
 
-      /*
-       * Swipe left -> next
-       * Swipe right -> previous
-       */
       if (dragDistance > 0) {
         goToPosition(position + 1);
       } else {
@@ -299,58 +306,10 @@ export function HeroCarousel() {
     [goToPosition, position],
   );
 
-  /*
-   * POINTER CANCEL
-   */
   const handlePointerCancel = useCallback(() => {
     dragStartX.current = null;
     setPaused(false);
   }, []);
-
-  /*
-   * While images are loading, keep the first slide's background.
-   *
-   * Since the first image is preloaded before autoplay,
-   * users should not see a blank transition.
-   */
-  if (!imagesReady) {
-    return (
-      <section
-        id="home"
-        aria-label="Featured Olympia slides"
-        className="
-          relative
-          h-[520px]
-          overflow-hidden
-          bg-[#dcebf9]
-          md:h-[560px]
-        "
-        style={{
-          background: slides[0].background,
-        }}
-      >
-        <div className="absolute inset-0">
-          <Image
-            src={slides[0].image}
-            alt={slides[0].imageAlt}
-            fill
-            priority
-            sizes="100vw"
-            className="object-cover object-center"
-          />
-        </div>
-
-        <div
-          className="
-            pointer-events-none
-            absolute
-            inset-0
-            bg-[linear-gradient(90deg,rgba(255,255,255,0.97)_0%,rgba(255,255,255,0.88)_32%,rgba(255,255,255,0.52)_58%,rgba(255,255,255,0.08)_82%,rgba(255,255,255,0)_100%)]
-          "
-        />
-      </section>
-    );
-  }
 
   return (
     <section
@@ -408,14 +367,23 @@ export function HeroCarousel() {
                 background: slide.background,
               }}
             >
-              {/* HERO IMAGE */}
+              {/* HERO IMAGE
+               *
+               * FIX 4 — no lazy loading for slides that are off-screen
+               * horizontally. Every slide image is requested right away,
+               * so the next slide is already painted when it slides in.
+               */}
               <div className="absolute inset-0">
                 <Image
                   src={slide.image}
                   alt={slide.imageAlt}
                   fill
                   priority={index === 1}
+                  loading={index === 1 ? undefined : "eager"}
                   sizes="100vw"
+                  draggable={false}
+                  onLoad={() => markImageDone(slide.image)}
+                  onError={() => markImageDone(slide.image)}
                   className="
                     object-cover
                     object-center
