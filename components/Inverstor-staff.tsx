@@ -9,9 +9,9 @@ import type { LucideIcon } from "lucide-react";
 
 // Static demo values — replace with real data from your stock API.
 const stock = {
-  company: "Wanhua Chemical Group Co. 600309.SH",
+  company: "Olympia Chemical Group Co. 600309.SH",
   price: "68.90",
-  change: "+1.24¥",
+  change: "+1.24",
   percent: "+1.83%",
   time: "2026-10-06 13:07:20",
 };
@@ -131,7 +131,7 @@ export default function InvestorStaff() {
               className={`${item(800).className} mt-10 flex items-end gap-2 text-[#e0163c] md:mt-[52px]`}
             >
               <span className="pb-1 text-[44px] font-extralight leading-none md:text-[56px]">
-                ¥
+               
               </span>
               <span className="text-[72px] font-light leading-[0.9] tracking-tight md:text-[100px]">
                 {stock.price}

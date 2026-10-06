@@ -12,9 +12,9 @@ type NewsItem = {
 const news: NewsItem[] = [
   {
     title:
-      "Olympia Chemical's Taozi Bay Water Project Awarded China's Top Civil Engineering Honor — the Zhan Tianyou Award",
+      "Olympia Chemical's Taozi Bay Water Project Awarded India's Top Civil Engineering Honor — lorem epusum",
     date: "28/09/2026",
-    image: "https://en.whchem.com/repository/image/550cf71d-2361-4278-84a1-8a590c4a5bd0.jpg_560xa.jpg",
+    image: "https://en.whchem.com/repository/image/0ff91a4d-7f20-4976-83e9-64c1251cd89c.jpg_560xa.jpg",
     href: "#",
   },
   {
