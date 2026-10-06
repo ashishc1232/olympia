@@ -14,7 +14,7 @@ const news: NewsItem[] = [
     title:
       "Olympia Chemical's Taozi Bay Water Project Awarded India's Top Civil Engineering Honor — lorem epusum",
     date: "28/09/2026",
-    image: "https://en.whchem.com/repository/image/0ff91a4d-7f20-4976-83e9-64c1251cd89c.jpg_560xa.jpg",
+    image: "https://en.whchem.com/repository/image/72ac7908-ee82-47ca-9ffb-658b34f164a0.jpeg",
     href: "#",
   },
   {
